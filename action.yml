@@ -1,0 +1,274 @@
+name: "scalified/docker-run-action"
+description: "Executes a docker run command with user-provided arguments"
+author: "Scalified"
+branding:
+  icon: "terminal"
+  color: "black"
+
+inputs:
+  args:
+    description: "Additional docker run arguments"
+    required: false
+    default: ""
+  command:
+    description: "Command to execute in the container"
+    required: false
+    default: ""
+  detach:
+    description: "Run container in background"
+    required: false
+    default: "false"
+  entrypoint:
+    description: "Overwrite the default ENTRYPOINT of the image"
+    required: false
+    default: ""
+  env:
+    description: "Set environment variables (space-separated KEY=VALUE pairs)"
+    required: false
+    default: ""
+  health-cmd:
+    description: "Command to run to check health"
+    required: false
+    default: ""
+  health-interval:
+    description: "Time between running the check (ms|s|m|h)"
+    required: false
+    default: "5s"
+  health-retries:
+    description: "Consecutive failures needed to report unhealthy"
+    required: false
+    default: "5"
+  health-start-interval:
+    description: "Time between running the check during the start period (ms|s|m|h)"
+    required: false
+    default: "0s"
+  health-start-period:
+    description: "Start period for the container to initialize before starting health-retries countdown (ms|s|m|h)"
+    required: false
+    default: "0s"
+  health-timeout:
+    description: "Maximum time to allow one check to run (ms|s|m|h)"
+    required: false
+    default: "0s"
+  image:
+    description: "Docker image to run"
+    required: true
+  links:
+    description: "Add link to another container (space-separated)"
+    required: false
+    default: ""
+  name:
+    description: "Assign a name to the container (uses the first 7 characters of the commit hash when no value is set)"
+    required: false
+    default: ""
+  privileged:
+    description: "Give extended privileges to this container"
+    required: false
+    default: "false"
+  volumes:
+    description: "Bind mount a volume (space-separated)"
+    required: false
+    default: ""
+  workdir:
+    description: "Working directory inside the container"
+    required: false
+    default: ""
+
+outputs:
+  container-id:
+    description: "ID of the created container"
+    value: ${{ steps.docker-run.outputs.container-id }}
+  container-name:
+    description: "Name of the created container"
+    value: ${{ steps.docker-run.outputs.container-name }}
+  post-cmd:
+    description: "Post-execution command that shows container logs and performs cleanup"
+    value: ${{ steps.docker-run.outputs.post-cmd }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: docker-run
+      name: "Run Docker ${{ inputs.image }} container"
+      env:
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_DETACH: ${{ inputs.detach }}
+        INPUT_ENTRYPOINT: ${{ inputs.entrypoint }}
+        INPUT_ENV: ${{ inputs.env }}
+        INPUT_HEALTH_CMD: ${{ inputs.health-cmd }}
+        INPUT_HEALTH_INTERVAL: ${{ inputs.health-interval }}
+        INPUT_HEALTH_RETRIES: ${{ inputs.health-retries }}
+        INPUT_HEALTH_START_INTERVAL: ${{ inputs.health-start-interval }}
+        INPUT_HEALTH_START_PERIOD: ${{ inputs.health-start-period }}
+        INPUT_HEALTH_TIMEOUT: ${{ inputs.health-timeout }}
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_LINKS: ${{ inputs.links }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_PRIVILEGED: ${{ inputs.privileged }}
+        INPUT_VOLUMES: ${{ inputs.volumes }}
+        INPUT_WORKDIR: ${{ inputs.workdir }}
+      run: |
+        # ${{ inputs.image }}
+        cmd="docker run"
+
+        echo "::group::🏷️ Setting up container name"
+        container_name="$INPUT_NAME"
+        if [ -z "$container_name" ]; then
+          container_name="${{ github.sha }}"
+          container_name="${container_name:0:7}"
+        fi
+        cmd="$cmd --name $container_name"
+        echo "✅ Set: --name $container_name"
+        echo "container-name=$container_name" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+        if [ -n "$INPUT_ARGS" ]; then
+          echo "::group::⚙️ Setting up container arguments"
+          cmd="$cmd $INPUT_ARGS"
+          echo "✅ Set: $INPUT_ARGS"
+          echo "::endgroup::"
+        fi
+
+        if [ "$INPUT_DETACH" = "true" ]; then
+        echo "::group::⚡ Setting up detach mode"
+          cmd="$cmd --detach"
+          echo "✅ Set: --detach"
+          echo "::endgroup::"
+        fi
+
+        if [ -n "$INPUT_ENTRYPOINT" ]; then
+          echo "::group::🚀 Setting up entrypoint"
+          cmd="$cmd --entrypoint=\"$INPUT_ENTRYPOINT\""
+          echo "✅ Set: --entrypoint=\"$INPUT_ENTRYPOINT\""
+          echo "::endgroup::"
+        fi
+
+        if [ -n "$INPUT_ENV" ]; then
+          echo "::group::🌿 Setting up environment variables"
+          read -ra ENVS <<< "$INPUT_ENV"
+          env_args=""
+          for env in "${ENVS[@]}"; do
+            env_args="$env_args -e \"$(echo $env | xargs)\""
+          done
+          cmd="$cmd $env_args"
+          echo "✅ Set: $env_args"
+          echo "::endgroup::"
+        fi
+
+        if [ -n "$INPUT_HEALTH_CMD" ]; then
+          echo "::group::💓 Setting up health check"
+          health_args="--health-cmd=\"$INPUT_HEALTH_CMD\""
+          health_args="$health_args --health-interval=$INPUT_HEALTH_INTERVAL"
+          health_args="$health_args --health-retries=$INPUT_HEALTH_RETRIES"
+          health_args="$health_args --health-start-interval=$INPUT_HEALTH_START_INTERVAL"
+          health_args="$health_args --health-start-period=$INPUT_HEALTH_START_PERIOD"
+          health_args="$health_args --health-timeout=$INPUT_HEALTH_TIMEOUT"
+          cmd="$cmd $health_args"
+          echo "✅ Set: $health_args"
+          echo "::endgroup::"
+        fi
+
+        if [ -n "$INPUT_LINKS" ]; then
+          echo "::group::🔗 Setting up container links"
+          read -ra LINKS <<< "$INPUT_LINKS"
+          link_args=""
+          for link in "${LINKS[@]}"; do
+            link_args="$link_args --link \"$(echo $link | xargs)\""
+          done
+          cmd="$cmd $link_args"
+          echo "✅ Set: $link_args"
+          echo "::endgroup::"
+        fi
+
+        if [ "$INPUT_PRIVILEGED" = "true" ]; then
+          echo "::group::🔒 Setting up privileged mode"
+          cmd="$cmd --privileged"
+          echo "✅ Set: --privileged"
+          echo "::endgroup::"
+        fi
+
+        echo "::group::💾 Setting up volumes"
+        cmd="$cmd -v ${{ github.workspace }}:/workspace"
+        echo "✅ Set: -v ${{ github.workspace }}:/workspace"
+
+        if [ -n "$INPUT_VOLUMES" ]; then
+          read -ra VOLUMES <<< "$INPUT_VOLUMES"
+          volumes_args=""
+          for volume in "${VOLUMES[@]}"; do
+            volumes_args="$volumes_args -v \"$(echo $volume | xargs)\""
+          done
+          cmd="$cmd $volumes_args"
+          echo "✅ Set: $volumes_args"
+        fi
+        echo "::endgroup::"
+
+        echo "::group::📂 Setting up working directory"
+        if [ -n "$INPUT_WORKDIR" ]; then
+          cmd="$cmd -w \"$INPUT_WORKDIR\""
+          echo "✅ Set: -w \"$INPUT_WORKDIR\""
+        else
+          cmd="$cmd -w \"/workspace\""
+          echo "✅ Set: -w \"/workspace\""
+        fi
+        echo "::endgroup::"
+
+        echo "::group::📦 Setting up image"
+        cmd="$cmd $INPUT_IMAGE"
+        echo "✅ Set: $INPUT_IMAGE"
+        echo "::endgroup::"
+
+        if [ -n "$INPUT_COMMAND" ]; then
+          echo "::group::▶️ Setting up container command"
+          cmd="$cmd $INPUT_COMMAND"
+          echo "✅ Set: $INPUT_COMMAND"
+          echo "::endgroup::"
+        fi
+
+        docker rm -f "$container_name" 2>/dev/null || true
+
+        echo "::group::🏃 Running command"
+        echo "$cmd"
+
+        function display_log() {
+          echo "::group::📄 Displaying '${container_name}' logs"
+          docker logs "$container_name"
+          echo "::endgroup::"
+        }
+
+        function cleanup() {
+          echo "::group::🗑️ Cleaning up"
+          docker rm -f "$container_name" 2>/dev/null || true
+          echo "::endgroup::"
+        }
+
+        post_cmd="docker logs $container_name 2>/dev/null || true && \
+          docker rm -f $container_name 2>/dev/null || true"
+
+        if [ "$INPUT_DETACH" = "true" ]; then
+          container_id=$(eval "$cmd")
+          echo "container-id=$container_id" >> $GITHUB_OUTPUT
+
+          if [ -n "$INPUT_HEALTH_CMD" ]; then
+            echo "⏳ Waiting for '$container_name' container to become healthy..."
+            for i in {1..30}; do
+              if [ "$(docker inspect --format='{{.State.Health.Status}}' "$container_name" 2>/dev/null)" = "healthy" ]; then
+                display_log
+                echo "post-cmd=$post_cmd" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+              sleep 2
+            done
+
+            display_log
+            echo "❌ Timeout: Container '$container_name' did not become healthy in time"
+            cleanup
+            echo "post-cmd=$post_cmd" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+        else
+          trap 'echo "container-id=" >> $GITHUB_OUTPUT; cleanup' EXIT
+          eval "$cmd"
+        fi
+        echo "::endgroup::"
+      shell: bash
