@@ -251,7 +251,7 @@ runs:
 
           if [ -n "$INPUT_HEALTH_CMD" ]; then
             echo "⏳ Waiting for '$container_name' container to become healthy..."
-            for i in {1..30}; do
+            for i in {1..60}; do
               if [ "$(docker inspect --format='{{.State.Health.Status}}' "$container_name" 2>/dev/null)" = "healthy" ]; then
                 display_log
                 echo "post-cmd=$post_cmd" >> $GITHUB_OUTPUT
