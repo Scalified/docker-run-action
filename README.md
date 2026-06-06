@@ -30,6 +30,8 @@ A simple GitHub Action to execute `docker run` commands with customizable inputs
     links: >-
       postgres
       redis:cache
+    networks: >-
+      ci
     name: my-container
     privileged: false
     rm: true
@@ -56,8 +58,9 @@ A simple GitHub Action to execute `docker run` commands with customizable inputs
 | `health-start-period`   | Start period for the container to initialize before starting health-retries countdown (ms\|s\|m\|h)  | No       | `0s`                      |
 | `health-timeout`        | Maximum time to allow one check to run (ms\|s\|m\|h)                                                 | No       | `0s`                      |
 | `image`                 | Docker image to run                                                                                  | Yes      |                           |
-| `links`                 | Add link to another container (space-separated)                                                      | No       |                           |
-| `name`                  | Assign a name to the container (uses the first 7 characters of the commit hash when no value is set) | No       |                           |
+| `links`                 | Add link to another container (space-separated)                                                      | No       | `""`                      |
+| `networks`              | Connect container to a network (space-separated). Missing networks will be created as 'bridge' type  | No       | `""`                      |
+| `name`                  | Assign a name to the container (uses the first 7 characters of the commit hash when no value is set) | No       | `""`                      |
 | `privileged`            | Give extended privileges to this container                                                           | No       | `false`                   |
 | `volumes`               | Bind mount a volume (space-separated)                                                                | No       | `${{ github.workspace }}` |
 | `workdir`               | Working directory inside the container                                                               | No       | `/workspace`              |

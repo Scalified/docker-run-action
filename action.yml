@@ -57,6 +57,10 @@ inputs:
     description: "Add link to another container (space-separated)"
     required: false
     default: ""
+  networks:
+    description: "Connect container to a network (space-separated). Missing networks will be created as 'bridge' type"
+    required: false
+    default: ""
   name:
     description: "Assign a name to the container (uses the first 7 characters of the commit hash when no value is set)"
     required: false
@@ -104,6 +108,7 @@ runs:
         INPUT_HEALTH_TIMEOUT: ${{ inputs.health-timeout }}
         INPUT_IMAGE: ${{ inputs.image }}
         INPUT_LINKS: ${{ inputs.links }}
+        INPUT_NETWORKS: ${{ inputs.networks }}
         INPUT_NAME: ${{ inputs.name }}
         INPUT_PRIVILEGED: ${{ inputs.privileged }}
         INPUT_VOLUMES: ${{ inputs.volumes }}
@@ -181,6 +186,23 @@ runs:
           echo "::endgroup::"
         fi
 
+        if [ -n "$INPUT_NETWORKS" ]; then
+          echo "::group::🌐 Setting up networks"
+          read -ra NETWORKS <<< "$INPUT_NETWORKS"
+          network_args=""
+          for network in "${NETWORKS[@]}"; do
+            network=$(echo "$network" | xargs)
+            if ! docker network inspect "$network" >/dev/null 2>&1; then
+              docker network create "$network"
+              echo "Created network: $network"
+            fi
+            network_args="$network_args --network \"$network\""
+          done
+          cmd="$cmd $network_args"
+          echo "✅ Set: $network_args"
+          echo "::endgroup::"
+        fi
+
         if [ "$INPUT_PRIVILEGED" = "true" ]; then
           echo "::group::🔒 Setting up privileged mode"
           cmd="$cmd --privileged"
@@ -243,7 +265,8 @@ runs:
         }
 
         post_cmd="docker logs $container_name 2>/dev/null || true && \
-          docker rm -f $container_name 2>/dev/null || true"
+          docker rm -f $container_name 2>/dev/null || true && \
+          docker network rm $INPUT_NETWORKS 2>/dev/null || true"
 
         if [ "$INPUT_DETACH" = "true" ]; then
           container_id=$(eval "$cmd")
