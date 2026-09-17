@@ -151,10 +151,20 @@ runs:
 
         if [ -n "$INPUT_ENV" ]; then
           echo "::group::🌿 Setting up environment variables"
-          read -ra ENVS <<< "$INPUT_ENV"
+          # Flatten newlines so multi-line `env` input is not silently
+          # truncated (`read` stops at the first newline).
+          read -ra ENVS <<< "${INPUT_ENV//$'\n'/ }"
           env_args=""
           for env in "${ENVS[@]}"; do
-            env_args="$env_args -e \"$(echo $env | xargs)\""
+            # Trim leading/trailing whitespace (same whitespace semantics as
+            # the previous `echo $env | xargs`, but without xargs' quote
+            # interpretation, which corrupted values containing quotes).
+            env="${env#"${env%%[![:space:]]*}"}"
+            env="${env%"${env##*[![:space:]]}"}"
+            # Single-quote-escape so `eval "$cmd"` re-parses the value
+            # byte-for-byte literally (' -> '\'').
+            env_escaped=$(printf '%s' "$env" | sed "s/'/'\\\\''/g")
+            env_args="$env_args -e '$env_escaped'"
           done
           cmd="$cmd $env_args"
           echo "✅ Set: $env_args"
